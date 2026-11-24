@@ -1,6 +1,14 @@
 # pi-monitor
 
-Turn a **Raspberry Pi 5** (connected to an HDMI display) into a hardware-accelerated, low-latency **wireless/wired second monitor** for a **Linux Hyprland** workstation — without a physical HDMI dummy plug.
+Turn a **Raspberry Pi 5** (connected to an HDMI display) into a hardware-accelerated, low-latency **second monitor** for a **Linux Hyprland** workstation — without a physical HDMI dummy plug or a direct video cable to your laptop.
+
+### Why & Connection Options
+
+Don't have the right HDMI / USB-C / DisplayPort cable or dongle to plug an extra monitor into your laptop (or want a cleaner desk without extra video cables)? As long as the monitor is plugged into your Raspberry Pi, you can stream a virtual Hyprland display to it over the network:
+
+- **Direct Ethernet Cable (Recommended):** Connect the laptop and Raspberry Pi directly with a standard Ethernet cable (`1 Gbps`, `~0.2 ms` RTT). Delivers near-native **1080p @ 60 FPS at 60+ Mbps HEVC**.
+- **Home/Office Network (Router Ethernet or 5 GHz Wi-Fi):** Works over your existing LAN or Wi-Fi (`PI_MONITOR_BITRATE=20000`–`40000` recommended over Wi-Fi depending on signal quality).
+- **Mesh VPN (Tailscale / WireGuard):** Works even across networks by pointing `PI_MONITOR_HOST` to the host's VPN IP and lowering `PI_MONITOR_BITRATE` (e.g. `10000`–`20000`).
 
 `pi-monitor` orchestrates:
 1. **Hyprland Headless Output** (`HEADLESS-1`) created/destroyed on demand on the Host.
