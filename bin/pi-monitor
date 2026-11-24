@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONFIG_FILE="${PI_MONITOR_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/pi-monitor/config.env}"
+if [[ -f "$CONFIG_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$CONFIG_FILE"
+fi
+
+CMD="${1:-toggle}"
+SIDE="${2:-${PI_MONITOR_DEFAULT_SIDE:-right}}"
+
+HOST="${PI_MONITOR_HOST:-192.168.10.1}"
+SSH_HOST="${PI_MONITOR_SSH_HOST:-laptop}"
+OUTPUT_NAME="${PI_MONITOR_OUTPUT:-HEADLESS-1}"
+WIDTH="${PI_MONITOR_WIDTH:-1920}"
+HEIGHT="${PI_MONITOR_HEIGHT:-1080}"
+FPS="${PI_MONITOR_FPS:-60}"
+SCALE="${PI_MONITOR_SCALE:-1}"
+BITRATE="${PI_MONITOR_BITRATE:-60000}"
+CODEC="${PI_MONITOR_CODEC:-HEVC}"
+APP_NAME="${PI_MONITOR_APP_NAME:-Desktop}"
+SUNSHINE_SERVICE="${PI_MONITOR_SUNSHINE_SERVICE:-app-dev.lizardbyte.app.Sunshine.service}"
+POS_RIGHT="${PI_MONITOR_POS_RIGHT:-1920x0}"
+POS_LEFT="${PI_MONITOR_POS_LEFT:--${WIDTH}x0}"
+AUDIO_ON_HOST="${PI_MONITOR_AUDIO_ON_HOST:-1}"
+XAUTHORITY_PATH="${PI_MONITOR_XAUTHORITY:-$HOME/.Xauthority}"
+DISPLAY_NUM="${PI_MONITOR_DISPLAY:-:0}"
+
+is_running() {
+  XDG_RUNTIME_DIR="/run/user/$(id -u)" systemctl --user is-active --quiet pi-monitor-moonlight.service 2>/dev/null \
+    || pgrep -f "moonlight-qt stream.*${HOST}" >/dev/null 2>&1
+}
+
+host_run() {
+  ssh -o ConnectTimeout=3 "$SSH_HOST" bash -s <<< "$1"
+}
+
+start_monitor() {
+  local pos="$POS_RIGHT"
+  if [[ "$SIDE" == "left" ]]; then
+    pos="$POS_LEFT"
+  elif [[ "$SIDE" != "right" ]]; then
+    echo "Invalid side: '$SIDE' (expected 'left' or 'right')" >&2
+    exit 1
+  fi
+
+  host_run "
+    export XDG_RUNTIME_DIR=/run/user/\$(id -u)
+    export DBUS_SESSION_BUS_ADDRESS=unix:path=\$XDG_RUNTIME_DIR/bus
+    export WAYLAND_DISPLAY=\$(ls \$XDG_RUNTIME_DIR/wayland-* 2>/dev/null | head -1 | xargs -r basename)
+    export HYPRLAND_INSTANCE_SIGNATURE=\$(ls \$XDG_RUNTIME_DIR/hypr/ 2>/dev/null | head -1)
+    if ! hyprctl monitors all | grep -q 'Monitor ${OUTPUT_NAME}'; then
+      hyprctl output create headless ${OUTPUT_NAME} >/dev/null
+      sleep 0.4
+    fi
+    hyprctl eval 'hl.monitor({ output = \"${OUTPUT_NAME}\", mode = \"${WIDTH}x${HEIGHT}@${FPS}\", position = \"${pos}\", scale = ${SCALE}, disabled = false })' >/dev/null
+    systemctl --user import-environment WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE XDG_RUNTIME_DIR
+    if ! systemctl --user is-active --quiet ${SUNSHINE_SERVICE}; then
+      systemctl --user start ${SUNSHINE_SERVICE}
+      sleep 1.5
+    fi
+  "
+
+  export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+  export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+  systemctl --user stop pi-monitor-moonlight.service 2>/dev/null || true
+  systemctl --user reset-failed pi-monitor-moonlight.service 2>/dev/null || true
+  pkill -f "moonlight-qt stream.*${HOST}" 2>/dev/null || true
+  sleep 0.3
+
+  local audio_flag=""
+  if [[ "$AUDIO_ON_HOST" == "1" ]]; then
+    audio_flag="--audio-on-host"
+  fi
+
+  # shellcheck disable=SC2086
+  systemd-run --user --unit=pi-monitor-moonlight \
+    --setenv=DISPLAY="${DISPLAY_NUM}" \
+    --setenv=XAUTHORITY="${XAUTHORITY_PATH}" \
+    --setenv=QT_QPA_PLATFORM=xcb \
+    --setenv=SDL_VIDEODRIVER=x11 \
+    /usr/bin/moonlight-qt stream \
+      --"${HEIGHT}" --fps "${FPS}" --bitrate "${BITRATE}" \
+      --display-mode fullscreen \
+      --video-codec "${CODEC}" \
+      ${audio_flag} \
+      --keep-awake \
+      --no-performance-overlay \
+      --capture-system-keys never \
+      "${HOST}" "${APP_NAME}"
+
+  echo "Secondary monitor enabled (${OUTPUT_NAME} -> ${WIDTH}x${HEIGHT}@${FPS}, side=${SIDE}, ${BITRATE} kbps ${CODEC})"
+}
+
+stop_monitor() {
+  export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+  export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+  systemctl --user stop pi-monitor-moonlight.service 2>/dev/null || true
+  pkill -f "moonlight-qt stream.*${HOST}" 2>/dev/null || true
+  host_run "
+    export XDG_RUNTIME_DIR=/run/user/\$(id -u)
+    export HYPRLAND_INSTANCE_SIGNATURE=\$(ls \"\$XDG_RUNTIME_DIR/hypr/\" 2>/dev/null | head -1)
+    if hyprctl monitors | grep -q 'Monitor ${OUTPUT_NAME}'; then
+      hyprctl eval 'hl.monitor({ output = \"${OUTPUT_NAME}\", disabled = true })' >/dev/null
+    fi
+  "
+  echo "Secondary monitor disabled (${OUTPUT_NAME} removed)"
+}
+
+case "$CMD" in
+  on|start)
+    start_monitor
+    ;;
+  off|stop)
+    stop_monitor
+    ;;
+  toggle)
+    if is_running; then
+      stop_monitor
+    else
+      start_monitor
+    fi
+    ;;
+  status)
+    if is_running; then
+      echo "ACTIVE (moonlight-qt -> ${HOST})"
+    else
+      echo "INACTIVE"
+    fi
+    ;;
+  *)
+    echo "Usage: pi-monitor {on [right|left]|off|toggle|status}"
+    exit 1
+    ;;
+esac

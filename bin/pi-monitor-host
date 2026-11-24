@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONFIG_FILE="${PI_MONITOR_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/pi-monitor/config.env}"
+if [[ -f "$CONFIG_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$CONFIG_FILE"
+fi
+
+PI_SSH_HOST="${PI_MONITOR_PI_SSH_HOST:-pi}"
+REMOTE_BIN="${PI_MONITOR_REMOTE_BIN:-~/.local/bin/pi-monitor}"
+
+exec ssh -o ConnectTimeout=3 "$PI_SSH_HOST" "$REMOTE_BIN $*"

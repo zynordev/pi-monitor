@@ -1,0 +1,7 @@
+# Minimal Sunshine configuration for streaming a Hyprland HEADLESS output
+# Place at ~/.config/sunshine/sunshine.conf on the Host
+
+capture = wlr
+output_name = HEADLESS-1
+origin_web_ui_allowed = lan
+min_log_level = info
