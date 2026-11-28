@@ -55,6 +55,10 @@ git clone https://github.com/zynordev/pi-monitor.git
 cd pi-monitor
 ./install.sh --pi
 ```
+This installs the `pi-monitor` CLI and sets up persistent systemd services:
+- `/etc/systemd/system/labwc-desktop.service`: Runs the lightweight `labwc` Wayland compositor on boot.
+- `~/.config/systemd/user/pi-monitor-moonlight.service`: Auto-reconnecting Moonlight client (`Restart=always`) that attaches as soon as the Host comes online.
+
 Edit `~/.config/pi-monitor/config.env` to match your Host IP, SSH alias, and desired resolution/position.
 
 ### 2. On the Host (Hyprland)
@@ -71,6 +75,11 @@ origin_web_ui_allowed = lan
 min_log_level = info
 ```
 *(See [`config/sunshine.conf.example`](config/sunshine.conf.example).)*
+
+To automatically initialize `HEADLESS-1` on Hyprland startup, add to your Hyprland execs:
+```bash
+hyprctl monitors all | grep -q 'Monitor HEADLESS-1' || hyprctl output create headless HEADLESS-1
+```
 
 ### 3. Firewall (Optional, UFW on Host)
 Restrict Sunshine ports to your Raspberry Pi's IP:

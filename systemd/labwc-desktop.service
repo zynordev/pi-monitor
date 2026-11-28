@@ -1,0 +1,24 @@
+[Unit]
+Description=Labwc Wayland Compositor (Pi Monitor Display)
+After=systemd-user-sessions.service
+
+[Service]
+User=CURRENT_USER
+PAMName=login
+TTYPath=/dev/tty2
+StandardInput=tty
+StandardOutput=tty
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=no
+Environment=XKB_DEFAULT_LAYOUT=tr
+Environment=XDG_SESSION_TYPE=wayland
+Environment=XDG_SESSION_CLASS=user
+Environment=XDG_CURRENT_DESKTOP=wlroots
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+ExecStart=/usr/bin/labwc
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

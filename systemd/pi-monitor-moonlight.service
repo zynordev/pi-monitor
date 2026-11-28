@@ -1,0 +1,21 @@
+[Unit]
+Description=Pi Monitor Moonlight Stream Client
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-%h/.config/pi-monitor/config.env
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=%h/.Xauthority
+Environment=QT_QPA_PLATFORM=wayland
+Environment=WAYLAND_DISPLAY=wayland-0
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+Environment=XDG_SESSION_TYPE=wayland
+Environment=SDL_VIDEODRIVER=wayland
+ExecStart=/usr/bin/moonlight-qt stream --1080 --fps 144 --bitrate 60000 --display-mode fullscreen --video-codec HEVC --audio-on-host --keep-awake --no-performance-overlay --capture-system-keys never 192.168.10.1 Desktop
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

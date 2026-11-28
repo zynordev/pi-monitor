@@ -64,31 +64,44 @@ start_monitor() {
 
   export XDG_RUNTIME_DIR="/run/user/$(id -u)"
   export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
-  systemctl --user stop pi-monitor-moonlight.service 2>/dev/null || true
-  systemctl --user reset-failed pi-monitor-moonlight.service 2>/dev/null || true
-  pkill -f "moonlight-qt stream.*${HOST}" 2>/dev/null || true
-  sleep 0.3
 
-  local audio_flag=""
-  if [[ "$AUDIO_ON_HOST" == "1" ]]; then
-    audio_flag="--audio-on-host"
+  # Ensure labwc compositor service is active if available
+  if ! systemctl is-active --quiet labwc-desktop.service 2>/dev/null; then
+    sudo systemctl start labwc-desktop.service 2>/dev/null || true
+    sleep 1
   fi
 
-  # shellcheck disable=SC2086
-  systemd-run --user --unit=pi-monitor-moonlight \
-    --setenv=DISPLAY="${DISPLAY_NUM}" \
-    --setenv=XAUTHORITY="${XAUTHORITY_PATH}" \
-    --setenv=QT_QPA_PLATFORM=xcb \
-    --setenv=SDL_VIDEODRIVER=x11 \
-    /usr/bin/moonlight-qt stream \
-      --"${HEIGHT}" --fps "${FPS}" --bitrate "${BITRATE}" \
-      --display-mode fullscreen \
-      --video-codec "${CODEC}" \
-      ${audio_flag} \
-      --keep-awake \
-      --no-performance-overlay \
-      --capture-system-keys never \
-      "${HOST}" "${APP_NAME}"
+  if systemctl --user list-unit-files pi-monitor-moonlight.service 2>/dev/null | grep -q pi-monitor-moonlight; then
+    systemctl --user reset-failed pi-monitor-moonlight.service 2>/dev/null || true
+    systemctl --user restart pi-monitor-moonlight.service
+  else
+    systemctl --user stop pi-monitor-moonlight.service 2>/dev/null || true
+    systemctl --user reset-failed pi-monitor-moonlight.service 2>/dev/null || true
+    pkill -f "moonlight-qt stream.*${HOST}" 2>/dev/null || true
+    sleep 0.3
+
+    local audio_flag=""
+    if [[ "$AUDIO_ON_HOST" == "1" ]]; then
+      audio_flag="--audio-on-host"
+    fi
+
+    # shellcheck disable=SC2086
+    systemd-run --user --unit=pi-monitor-moonlight \
+      --setenv=DISPLAY="${DISPLAY_NUM}" \
+      --setenv=XAUTHORITY="${XAUTHORITY_PATH}" \
+      --setenv=QT_QPA_PLATFORM=wayland \
+      --setenv=WAYLAND_DISPLAY=wayland-0 \
+      --setenv=SDL_VIDEODRIVER=wayland \
+      /usr/bin/moonlight-qt stream \
+        --"${HEIGHT}" --fps "${FPS}" --bitrate "${BITRATE}" \
+        --display-mode fullscreen \
+        --video-codec "${CODEC}" \
+        ${audio_flag} \
+        --keep-awake \
+        --no-performance-overlay \
+        --capture-system-keys never \
+        "${HOST}" "${APP_NAME}"
+  fi
 
   echo "Secondary monitor enabled (${OUTPUT_NAME} -> ${WIDTH}x${HEIGHT}@${FPS}, side=${SIDE}, ${BITRATE} kbps ${CODEC})"
 }
